@@ -1,7 +1,7 @@
 # Snow Informed Reservoir Operations (SIRO) Model Intercomparison Experiment: Phase 2
 
 <p align="center">
-  <img src="logos/SIRO_logo_main_transparentbg.png" alt="SIRO logo by Sydney Baratta" width="200">
+  <img src="logos/SIRO_logo_main_transparentbg.png" alt="SIRO logo by Sydney Baratta" width="300">
 </p>
 
 

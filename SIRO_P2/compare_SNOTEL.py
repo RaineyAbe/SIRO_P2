@@ -143,6 +143,9 @@ def compare_snotel(snotel_dir, models_dir, out_dir, start_date=None, end_date=No
     """
     os.makedirs(out_dir, exist_ok=True)
     stations = load_stations(snotel_dir)
+    if stations.empty:
+        print("No SNOTEL stations in SNOTEL_stations.csv; skipping the SNOTEL comparison.")
+        return pd.DataFrame()
     models = open_model_outputs(models_dir)
     print(f"Stations: {', '.join(f'{s.name} ({s.id})' for s in stations.itertuples())}")
     print(f"Models: {', '.join(models)}")

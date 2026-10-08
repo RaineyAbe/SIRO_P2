@@ -89,6 +89,12 @@ def find_stations(aoi_file, buffer_km=1.0):
                 "distance_from_aoi_km": round(distance_km, 2), 
                 "geometry": Point(lon, lat)
                 })
+    if not rows:  # no stations: an empty table with the same columns (GeoDataFrame needs a geometry column)
+        return gpd.GeoDataFrame(
+            columns=["id", "name", "elevation_m", "distance_from_aoi_km", "geometry"], 
+            geometry="geometry", 
+            crs="EPSG:4326"
+            )
     return gpd.GeoDataFrame(rows, geometry="geometry", crs="EPSG:4326")
 
 
@@ -146,6 +152,10 @@ def download_snotel(out_dir, start_date, end_date, aoi_file=None, sites=None, bu
         stations = find_stations(aoi_file, buffer_km)
         if stations.empty:
             print(f"No SNOTEL stations found within {buffer_km} km of the AOI. Try a larger --buffer_km.")
+            # Write the empty station table so the SNOTEL comparison knows there is nothing to compare
+            pd.DataFrame(columns=["id", "name", "elevation_m", "distance_from_aoi_km", "lon", "lat"]).to_csv(
+                os.path.join(out_dir, "SNOTEL_stations.csv"), index=False
+                )
             return stations
     print(f"SNOTEL stations: {', '.join(f'{r.name} ({r.id})' for r in stations.itertuples())}")
 
