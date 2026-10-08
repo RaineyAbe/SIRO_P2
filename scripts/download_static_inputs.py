@@ -40,7 +40,7 @@ from shapely.geometry import box, mapping
 
 # SETTINGS
 BASE_DIR = "/Users/rdcrlrka/Research/SIRO/SIRO_P2/study_sites"
-SITE_NAMES = ["MCS"] #["east_taylor", "kings"]
+SITE_NAMES = ["east_taylor", "kings"]
 BUFFER = 10e3           # meters to buffer the input watershed outlines
 HOR_CRS = "EPSG:5070"   # output horizontal CRS: NAD83 / Conus Albers
 VERT_CRS = "EPSG:5703"  # output vertical CRS: NAVD88 (3DEP is already NAVD88)
@@ -333,27 +333,27 @@ def main():
             aoi_path, out_dir=aoi_dir, site=site, overwrite=OVERWRITE
             )
 
-        # # download: 3DEP DEM
-        # dem_stem = os.path.join(out_dir, f"{site}_3DEP_DEM_{DEM_RES}m")
-        # if OVERWRITE or not os.path.exists(f"{dem_stem}_{tag}_bbox.tif"):
-        #     print("Downloading 3DEP DEM ...")
-        #     dem = download_3dep(bbox_gdf)
-        #     write_bbox_and_buffer(dem, buffer_gdf, bbox_gdf, dem_stem, tag)
-        # else:
-        #     print("DEM already exists, skipping.")
+        # download: 3DEP DEM
+        dem_stem = os.path.join(out_dir, f"{site}_3DEP_DEM_{DEM_RES}m")
+        if OVERWRITE or not os.path.exists(f"{dem_stem}_{tag}_bbox.tif"):
+            print("Downloading 3DEP DEM ...")
+            dem = download_3dep(bbox_gdf)
+            write_bbox_and_buffer(dem, buffer_gdf, bbox_gdf, dem_stem, tag)
+        else:
+            print("DEM already exists, skipping.")
 
-        # # download: LANDFIRE EVT/EVH
-        # zip_path = os.path.join(out_dir, f"{site}_LF2025_{tag}.zip")
-        # if OVERWRITE or not landfire_outputs_exist(out_dir, site, tag):
-        #     # reuse a zip left over from an interrupted run
-        #     if OVERWRITE or not os.path.exists(zip_path):
-        #         print("Requesting LANDFIRE layers ...")
-        #         download_landfire(bbox_gdf, zip_path)
-        #     else:
-        #         print(f"Using existing {os.path.basename(zip_path)}")
-        #     process_landfire(zip_path, bbox_gdf, buffer_gdf, out_dir, site, tag)
-        # else:
-        #     print("LANDFIRE layers already exist, skipping.")
+        # download: LANDFIRE EVT/EVH
+        zip_path = os.path.join(out_dir, f"{site}_LF2025_{tag}.zip")
+        if OVERWRITE or not landfire_outputs_exist(out_dir, site, tag):
+            # reuse a zip left over from an interrupted run
+            if OVERWRITE or not os.path.exists(zip_path):
+                print("Requesting LANDFIRE layers ...")
+                download_landfire(bbox_gdf, zip_path)
+            else:
+                print(f"Using existing {os.path.basename(zip_path)}")
+            process_landfire(zip_path, bbox_gdf, buffer_gdf, out_dir, site, tag)
+        else:
+            print("LANDFIRE layers already exist, skipping.")
 
     print("\nDone!\n")
 
