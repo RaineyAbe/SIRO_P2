@@ -119,6 +119,21 @@ def clip_image_to_aoi(image_file, aoi, all_touched=False):
     return out_file
 
 
+def list_dir(ftp, path):
+    """
+    Names in an FTP directory (empty if it does not exist or cannot be listed). Changes into the directory
+    and lists it there, because this server returns nothing for nlst(path).
+    """
+    previous = ftp.pwd()
+    try:
+        ftp.cwd(path)
+        return sorted(os.path.basename(n.rstrip("/")) for n in ftp.nlst())
+    except error_perm:
+        return []
+    finally:
+        ftp.cwd(previous)
+
+
 def download_spires(
         out_dir, start_date, end_date, aoi_file=None, tiles=None,
         months=(10, 11, 12, 1, 2, 3, 4, 5, 6), dry_run=False, overwrite=False,
@@ -146,12 +161,18 @@ def download_spires(
 
     # Files are organized by tile, then calendar year
     for tile in tiles:
+        available_years = list_dir(ftp, f"{DATA_ROOT}/{tile}")
+        if not available_years:
+            print(f"\nWARNING: {DATA_ROOT}/{tile} not found on the server. "
+                  f"Tiles available: {', '.join(list_dir(ftp, DATA_ROOT)) or 'none listed'}")
+            continue
         for year in range(start.year, end.year + 1):
             data_dir = f"{DATA_ROOT}/{tile}/{year}"
             try:
                 ftp.cwd(data_dir)
-            except error_perm:
-                print(f"\n{data_dir} not found on the server, skipping.")
+            except error_perm as e:
+                print(f"\nWARNING: could not open {data_dir} ({str(e).strip()}), skipping. "
+                      f"Years available for {tile}: {', '.join(available_years)}")
                 continue
 
             # Keep files within the date range and months

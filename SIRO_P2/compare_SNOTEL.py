@@ -1,18 +1,21 @@
 #!/usr/bin/env python
 
 """
-Compare modeled snow depth and SWE with SNOTEL station observations.
+Compare modeled snow depth and SWE with SNOTEL and CDEC station observations.
 
 Snow-Informed Reservoir Operations (SIRO)
 USACE-ERDC-CRREL
 
 Steps:
-    1. Load the station list and daily data written by download_SNOTEL.py.
+    1. Load the station list and data written by download_SNOTEL.py: daily data from SNOTEL and CDEC
+       sensor stations, and measurement-date data from CDEC snow courses.
     2. Sample each prepared model (prepare_model_outputs.py) at the pixel containing each station
        (nearest pixel centre; stations outside a model's grid are skipped).
     3. For each station, model, task, and variable, compute NSE, KGE (with its r, alpha, and beta
        components), bias, MAE, and RMSE over the days with both observed and modeled values, for each
-       water year and for all water years together. Days can be limited to --months.
+       water year and for all water years together. Days can be limited to --months. Metrics need at
+       least MIN_DAYS paired days, so snow courses (a few measurements per year) usually only get
+       metrics for the "all" period.
 
 Outputs, in --out_dir:
     SNOTEL_comparison_metrics.csv   one row per station, model, task, variable, and period
@@ -70,11 +73,14 @@ def load_stations(snotel_dir):
     return stations
 
 
-def load_station_data(snotel_dir, station_id):
+def load_station_data(snotel_dir, station_id, data_file=None):
     """
-    Daily SNOTEL data [m] indexed by calendar date, or None if the file is missing.
+    Station data [m] indexed by calendar date, or None if the file is missing. data_file is the file name
+    from the station table (default: the SNOTEL daily file name).
     """
-    path = os.path.join(snotel_dir, f"SNOTEL_{station_id.replace(':', '_')}_daily.csv")
+    if not isinstance(data_file, str):
+        data_file = f"SNOTEL_{station_id.replace(':', '_')}_daily.csv"
+    path = os.path.join(snotel_dir, data_file)
     if not os.path.exists(path):
         warnings.warn(f"No data file for station {station_id}: {path}")
         return None
@@ -144,7 +150,7 @@ def compare_snotel(snotel_dir, models_dir, out_dir, start_date=None, end_date=No
     os.makedirs(out_dir, exist_ok=True)
     stations = load_stations(snotel_dir)
     if stations.empty:
-        print("No SNOTEL stations in SNOTEL_stations.csv; skipping the SNOTEL comparison.")
+        print("No stations in SNOTEL_stations.csv; skipping the station comparison.")
         return pd.DataFrame()
     models = open_model_outputs(models_dir)
     print(f"Stations: {', '.join(f'{s.name} ({s.id})' for s in stations.itertuples())}")
@@ -152,7 +158,7 @@ def compare_snotel(snotel_dir, models_dir, out_dir, start_date=None, end_date=No
 
     rows = []
     for station in stations.itertuples():
-        obs_data = load_station_data(snotel_dir, station.id)
+        obs_data = load_station_data(snotel_dir, station.id, getattr(station, "data_file", None))
         if obs_data is None:
             continue
 
@@ -184,6 +190,8 @@ def compare_snotel(snotel_dir, models_dir, out_dir, start_date=None, end_date=No
                     sim = pixel[var].sel(task=task, time=dates).to_numpy().astype("float64")
                     for period, in_period in periods:
                         rows.append({
+                            "network": getattr(station, "network", "SNOTEL"),
+                            "station_type": getattr(station, "station_type", "sensor"),
                             "station_id": station.id,
                             "station_name": station.name,
                             "model": model,
@@ -207,7 +215,7 @@ def compare_snotel(snotel_dir, models_dir, out_dir, start_date=None, end_date=No
     print(f"\nSNOTEL comparison metrics for {len(metrics)} station/model/task/variable/period combinations saved to: {out_file}")
     if not metrics.empty:
         summary = metrics[(metrics.period == "all") & (metrics.variable == "snow_depth")]
-        print(summary[["station_name", "model", "condition", "n_days", "NSE", "KGE", "bias_m"]].round(3).to_string(index=False))
+        print(summary[["network", "station_name", "model", "condition", "n_days", "NSE", "KGE", "bias_m"]].round(3).to_string(index=False))
     return metrics
 
 

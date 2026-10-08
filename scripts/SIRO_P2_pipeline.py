@@ -11,8 +11,8 @@ Runs the selected steps (--steps) for an area of interest and time span:
     1. Compare modeled and LiDAR snow depth
     2. Download SPIReS fSCA
     3. Compare modeled and SPIReS SCA
-    4. Download SNOTEL snow depth and SWE
-    5. Compare modeled and SNOTEL snow depth and SWE
+    4. Download SNOTEL and CDEC snow depth and SWE
+    5. Compare modeled and SNOTEL/CDEC snow depth and SWE
 
 Steps 1, 3, and 5 read the step 0 netCDFs from OUT_DIR/model_outputs/ (or --models_dir).
 
@@ -71,7 +71,8 @@ def get_parser():
     parser.add_argument("--model_dir", default=None, type=str, help="Path to the raw model outputs. Required for prepare_models.")
     parser.add_argument("--models_dir", default=None, type=str, help="Directory of prepared model netCDFs for the comparison steps (default: OUT_DIR/model_outputs).")
     parser.add_argument("--dem_file", default=None, type=str, help="DEM GeoTIFF for elevation/aspect-binned SCA metrics (skipped if not given).")
-    parser.add_argument("--snotel_sites", default=None, type=str, nargs="+", help="SNOTEL station IDs (e.g., 637:ID:SNTL). Default: all stations within --snotel_buffer_km of the AOI.")
+    parser.add_argument("--snotel_sites", default=None, type=str, nargs="+", help="Station IDs (SNOTEL, e.g., 637:ID:SNTL; CDEC, e.g., TNY). Default: all stations within --snotel_buffer_km of the AOI.")
+    parser.add_argument("--station_networks", default=["SNOTEL", "CDEC"], type=str, nargs="+", choices=["SNOTEL", "CDEC"], help="Station networks to search within --snotel_buffer_km of the AOI.")
     parser.add_argument("--snotel_buffer_km", default=1.0, type=float, help="Include SNOTEL stations within this distance of the AOI [km] (default: 1).")
     parser.add_argument("--steps", default=list(STEPS), type=int, nargs="+", choices=list(STEPS), help="Pipeline steps to run: " + ", ".join(f"{k} = {v}" for k, v in STEPS.items()) + " (default: all).")
     parser.add_argument("--dry_run", default=False, type=bool, help="For download steps, list what would be downloaded without downloading.")
@@ -166,14 +167,14 @@ def main():
 
     # --- SNOTEL ---
     if 4 in args.steps:
-        print("\n--- Downloading SNOTEL snow depth ---")
+        print("\n--- Downloading SNOTEL and CDEC snow depth and SWE ---")
         download_snotel(
             dirs["SNOTEL"], args.start_date, args.end_date, aoi_file=args.aoi_file,
-            sites=args.snotel_sites, buffer_km=args.snotel_buffer_km
+            sites=args.snotel_sites, buffer_km=args.snotel_buffer_km, networks=args.station_networks
             )
 
     if 5 in args.steps:
-        print("\n--- Comparing modeled and SNOTEL snow depth ---")
+        print("\n--- Comparing modeled and SNOTEL/CDEC snow depth and SWE ---")
         compare_snotel(
             dirs["SNOTEL"], dirs["models"], dirs["SNOTEL"], start_date=args.start_date,
             end_date=args.end_date, months=args.months
