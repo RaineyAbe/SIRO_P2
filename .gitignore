@@ -1,0 +1,9 @@
+# temporary files
+__pycache__/
+.DS_Store/
+.vs_code/
+
+# Python packaging
+*.egg-info/
+build/
+dist/

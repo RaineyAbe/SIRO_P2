@@ -1,0 +1,20 @@
+name: siro_p2
+channels:
+ - conda-forge
+dependencies:
+ - python=3.14
+ - dask
+ - gdal
+ - geopandas
+ - pdal
+ - jupyterlab
+ - rioxarray
+ - scipy
+ - netcdf4
+ - tqdm
+ - xarray-spatial
+ - pip
+ - pip:
+    - py3dep
+    - metloom
+    - -e .  # installs the SIRO_P2 package from this repo (editable)

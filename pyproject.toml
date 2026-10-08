@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "siro-p2"
+version = "0.1.0"
+description = "Snow-Informed Reservoir Operations (SIRO) model intercomparison, Phase 2"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "USACE-ERDC-CRREL" }]
+dependencies = [
+    "affine",
+    "dask",
+    "geopandas",
+    "metloom",
+    "netCDF4",
+    "numpy",
+    "pandas",
+    "py3dep",
+    "pyproj",
+    "rasterio",
+    "requests",
+    "rioxarray",
+    "scipy",
+    "shapely",
+    "tqdm",
+    "xarray",
+    "xarray-spatial",
+]
+
+[project.scripts]
+siro-prepare-models = "SIRO_P2.prepare_models:main"
+siro-prepare-lidar = "SIRO_P2.prepare_lidar:main"
+siro-download-fsca = "SIRO_P2.download_fSCA:main"
+siro-download-snotel = "SIRO_P2.download_SNOTEL:main"
+siro-download-static-inputs = "SIRO_P2.download_static_inputs:main"
+siro-compare-lidar = "SIRO_P2.compare_lidar:main"
+siro-compare-fsca = "SIRO_P2.compare_fSCA:main"
+siro-compare-snotel = "SIRO_P2.compare_SNOTEL:main"
+
+[tool.setuptools]
+# Only the core package is installed; scripts/, SNODAS/, and the notebooks stay in the repo
+packages = ["SIRO_P2"]
