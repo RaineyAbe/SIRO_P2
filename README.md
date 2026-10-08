@@ -1,13 +1,28 @@
-# Snow Informed Reservoir Operations Model Intercomparison Experiment: Phase 2
+# Snow Informed Reservoir Operations (SIRO) Model Intercomparison Experiment: Phase 2
+
+<p align="center">
+  <img src="logos/SIRO_logo_main_transparentbg.png" alt="SIRO logo by Sydney Baratta" width="200">
+</p>
+
+
+## Correspondence
+
+Rainey Aberle (<Rainey.K.Aberle@erdc.dren.mil>)
+
+Wyatt Reis (<Wyatt.K.Reis@erdc.dren.mil>)
+
+Shad O'Neel (<Shad.R.ONeel@erdc.dren.mil>)
+
+USACE-ERDC-CRREL
 
 ## Installation
 
-The core functions live in the `SIRO_P2` package. Create the conda environment, which also installs the
+The core functions live in the `SIRO_P2` package. Create the mamba/conda environment, which also installs the
 package in editable mode (code changes take effect without reinstalling):
 
 ```
-conda env create -f environment.yml
-conda activate siro_p2
+mamba env create -f environment.yml
+mamba activate siro_p2
 ```
 
 Or, in an existing environment, from the repository root:
@@ -39,6 +54,5 @@ SIRO_P2/                         # repository root
 │   ├── run_SIRO_P2_pipeline.sh
 │   ├── crosscheck_compare_lidar_P1.py
 │   └── crosscheck_compare_SNOTEL_notebook.py
-├── analysis_notebooks/
 └── SNODAS/
 ```
