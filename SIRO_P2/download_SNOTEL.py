@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 
 """
-Download SNOTEL and CDEC snow depth and SWE for stations in and near an area of interest.
+Download all available SNOTEL and CDEC station variables, in metric units, for stations in and near an
+area of interest.
 
 Snow-Informed Reservoir Operations (SIRO)
 USACE-ERDC-CRREL
@@ -14,9 +15,14 @@ Stations within --buffer_km of the AOI polygon are found for each network (--net
 Outputs, in --out_dir:
     SNOTEL_stations.csv             all stations: network, station type, ID, name, location, elevation,
                                     distance from the AOI, and the station's data file
-    SNOTEL_<ID>_daily.csv           daily snow depth and SWE [m] (e.g., SNOTEL_637_ID_SNTL_daily.csv)
-    CDEC_<ID>_daily.csv             daily snow depth and SWE [m] at CDEC sensor stations
-    CDEC_<ID>_snow_course.csv       snow course snow depth and SWE [m] on each measurement date
+    SNOTEL_<ID>_daily.csv           daily values of every variable the station reports (e.g., SNOTEL_637_ID_SNTL_daily.csv)
+    CDEC_<ID>_daily.csv             daily values of every variable at CDEC sensor stations
+    CDEC_<ID>_snow_course.csv       snow course snow depth and SWE on each measurement date
+
+Station files have one column per variable, named <variable>_<units> after conversion to metric (see UNITS),
+e.g., snow_depth_m, SWE_m, air_temp_degC, precipitation_accum_m, wind_speed_m_s. Variables a station does
+not report are left out, except snow_depth_m and SWE_m, which are always included (NaN if not reported).
+Values in units without a conversion in UNITS are kept as reported, with those units in the column name.
 
 Usage:
     # With area of interest vector file:
@@ -36,23 +42,52 @@ Usage:
 
 import argparse
 import os
+import re
 import time
 
 import geopandas as gpd
 import pandas as pd
 from metloom.pointdata import CDECPointData, SnotelPointData
+from metloom.variables import SensorDescription
 from shapely.geometry import Point
 
 FEET_TO_M = 0.3048
-TO_METERS = {           # station units (lowercase) -> meters
-    "in": 0.0254,
-    "inches": 0.0254,
-}
 N_RETRIES = 3           # attempts per station if the server returns an error
 RETRY_WAIT_S = 30       # seconds to wait between attempts
-VARIABLES = {           # metloom variable -> output column [m]
-    "SNOWDEPTH": "snow_depth_m",
-    "SWE": "SWE_m",
+# Variables used to find stations, and the only ones downloaded for snow courses. Their columns keep these
+# names (used by compare_SNOTEL.py).
+SNOW_VARIABLES = {
+    "SNOWDEPTH": "snow_depth",
+    "SWE": "SWE",
+}
+# Reported units (lowercased, spaces removed) -> (metric units, conversion). Lengths are in meters.
+UNITS = {
+    "in": ("m", lambda x: x * 0.0254),
+    "inch": ("m", lambda x: x * 0.0254),
+    "inches": ("m", lambda x: x * 0.0254),
+    "ft": ("m", lambda x: x * FEET_TO_M),
+    "feet": ("m", lambda x: x * FEET_TO_M),
+    "degf": ("degC", lambda x: (x - 32) * 5 / 9),
+    "°f": ("degC", lambda x: (x - 32) * 5 / 9),
+    "f": ("degC", lambda x: (x - 32) * 5 / 9),
+    "degc": ("degC", lambda x: x),
+    "°c": ("degC", lambda x: x),
+    "c": ("degC", lambda x: x),
+    "mph": ("m_s", lambda x: x * 0.44704),
+    "pct": ("pct", lambda x: x),
+    "%": ("pct", lambda x: x),
+    "percent": ("pct", lambda x: x),
+    "deg": ("deg", lambda x: x),
+    "degree": ("deg", lambda x: x),
+    "degrees": ("deg", lambda x: x),
+    "w/m2": ("W_m2", lambda x: x),
+    "w/m^2": ("W_m2", lambda x: x),
+    "watt/m2": ("W_m2", lambda x: x),
+    "watts/m2": ("W_m2", lambda x: x),
+    "kac_ft": ("m3", lambda x: x * 1233.48e3),  # thousand acre-feet
+    "kaf": ("m3", lambda x: x * 1233.48e3),
+    "af": ("m3", lambda x: x * 1233.48),
+    "cfs": ("m3_s", lambda x: x * 0.0283168),
 }
 NETWORKS = {
     "SNOTEL": SnotelPointData,
@@ -141,7 +176,7 @@ def find_stations(aoi_file, buffer_km=1.0, networks=None):
     rows, failed = [], []
     for network in networks or NETWORKS:
         cls = NETWORKS[network]
-        variables = [getattr(cls.ALLOWED_VARIABLES, v) for v in VARIABLES]
+        variables = [getattr(cls.ALLOWED_VARIABLES, v) for v in SNOW_VARIABLES]
         # CDEC returns either snow courses or sensor stations per search, so search for both
         searches = [("sensor", False), ("snow_course", True)] if network == "CDEC" else [("sensor", None)]
         for station_type, snow_courses in searches:
@@ -189,18 +224,67 @@ def local_date(times):
     return times.dt.normalize()
 
 
+def all_variables(cls):
+    """
+    Every variable metloom allows for a network (the SensorDescription attributes of ALLOWED_VARIABLES).
+    """
+    variables = {}
+    for attr in dir(cls.ALLOWED_VARIABLES):
+        value = getattr(cls.ALLOWED_VARIABLES, attr)
+        if isinstance(value, SensorDescription):
+            variables[attr] = value
+    return variables
+
+
+def column_name(variable, attr):
+    """
+    Output column name (without units) for a metloom variable, e.g., "AIR TEMP" -> "air_temp".
+    """
+    if attr in SNOW_VARIABLES:
+        return SNOW_VARIABLES[attr]
+    name = variable.name.replace("-", "minus")
+    return re.sub(r"[^0-9a-zA-Z]+", "_", name).strip("_").lower()
+
+
+def to_metric(values, units, label):
+    """
+    Values converted to metric, and the metric units, from a column of reported values and their units.
+    Units without a conversion in UNITS are kept as reported (with a warning).
+    """
+    values = pd.to_numeric(values, errors="coerce")
+    keys = units.reindex(values.index).astype("string").str.lower().str.replace(" ", "", regex=False)
+    reported = sorted(keys.dropna().unique())
+    if not reported:
+        return values, None
+    known = [u for u in reported if u in UNITS]
+    targets = {UNITS[u][0] for u in known}
+    if len(known) != len(reported) or len(targets) > 1:
+        unknown = [u for u in reported if u not in UNITS]
+        if len(reported) > 1:
+            raise ValueError(f"{label}: mixed or unconvertible units {reported}")
+        print(f"{label}: no metric conversion for units '{unknown[0]}'; keeping the reported values")
+        return values, re.sub(r"[^0-9a-zA-Z]+", "_", unknown[0]).strip("_")
+    out = values.astype("float64").copy()
+    for u in known:
+        rows = (keys == u).fillna(False).to_numpy()
+        out[rows] = UNITS[u][1](values[rows].astype("float64"))
+    return out, targets.pop()
+
+
 def get_station_data(site_id, start_date, end_date, name=None, network="SNOTEL", station_type="sensor"):
     """
-    Snow depth and SWE [m] for one station, indexed by date: daily for sensor stations, the measurement
-    dates for snow courses.
+    Every variable the station reports, in metric units, indexed by date: daily for sensor stations, the
+    measurement dates for snow courses (snow depth and SWE only).
     """
     point = NETWORKS[network](site_id, name or site_id)
-    variables = [getattr(point.ALLOWED_VARIABLES, v) for v in VARIABLES]
+    variables = all_variables(point)
+    if station_type == "snow_course":
+        variables = {a: v for a, v in variables.items() if a in SNOW_VARIABLES}
     start, end = pd.to_datetime(start_date), pd.to_datetime(end_date)
     if station_type == "snow_course":
-        df = point.get_snow_course_data(start, end, variables)
+        df = point.get_snow_course_data(start, end, list(variables.values()))
     else:
-        df = point.get_daily_data(start, end, variables)
+        df = point.get_daily_data(start, end, list(variables.values()))
     if df is None or df.empty:
         return None
 
@@ -212,16 +296,24 @@ def get_station_data(site_id, start_date, end_date, name=None, network="SNOTEL",
             dates = local_date(df["measurementDate"]).fillna(dates)
     else:
         dates = df["datetime"]
-    out = pd.DataFrame({"date": dates})
-    for variable, column in VARIABLES.items():
-        name_in_df = getattr(point.ALLOWED_VARIABLES, variable).name
-        if name_in_df not in df:
-            out[column] = float("nan")
+
+    out = {"date": dates}
+    for attr, variable in variables.items():
+        if variable.name not in df or df[variable.name].isna().all():
             continue
-        units = {str(u).lower() for u in df[f"{name_in_df}_units"].dropna().unique()}
-        if len(units) != 1 or not units <= set(TO_METERS):
-            raise ValueError(f"Unexpected {variable} units for {network} {site_id}: {units}")
-        out[column] = (df[name_in_df] * TO_METERS[units.pop()]).round(4)
+        values, units = to_metric(
+            df[variable.name], df.get(f"{variable.name}_units", pd.Series(dtype=str)), f"{network} {site_id} {variable.name}"
+        )
+        column = column_name(variable, attr) + (f"_{units}" if units else "")
+        if column in out:  # two variables with the same name: keep both
+            column = f"{column}_{attr.lower()}"
+        out[column] = values.round(4)
+
+    # Snow depth and SWE are always included, for compare_SNOTEL.py
+    out = pd.DataFrame(out)
+    for column in ("snow_depth_m", "SWE_m"):
+        if column not in out:
+            out[column] = float("nan")
     return out.set_index("date")
 
 
@@ -265,7 +357,7 @@ def download_snotel(out_dir, start_date, end_date, aoi_file=None, sites=None, bu
         out_file = os.path.join(out_dir, station.data_file)
         data.to_csv(out_file)
         unit = "measurements" if station.station_type == "snow_course" else "days"
-        print(f"{label}: {data['snow_depth_m'].notna().sum()} {unit} of snow depth, "
+        print(f"{label}: {len(data.columns)} variables, {data['snow_depth_m'].notna().sum()} {unit} of snow depth, "
               f"{data['SWE_m'].notna().sum()} of SWE -> {out_file}")
 
     if failed:

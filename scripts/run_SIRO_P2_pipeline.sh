@@ -17,4 +17,5 @@ python SIRO_P2_pipeline.py \
 --steps 4 \
 --clip_fsca_to_aoi \
 --remove_unclipped_fsca \
+--overwrite \
 --out_dir $DATA_DIR
